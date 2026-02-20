@@ -624,6 +624,61 @@ router.post(
   })
 );
 
+// Email OTP Sign-in (optional): verify email OTP and return registrationToken (new user) or accessToken (existing user)
+router.post(
+  '/user/email-signin/verify',
+  asyncHandler(async (req, res) => {
+    const schema = z
+      .object({
+        email: z.string().email(),
+        otp: z.string().min(4).optional(),
+        emailVerifiedToken: z.string().min(1).optional(),
+        clientCode: z.string().min(1).optional()
+      })
+      .refine((v) => !!v.otp || !!v.emailVerifiedToken, { message: 'otp or emailVerifiedToken required' });
+
+    const body = schema.parse(req.body);
+    const emailLower = body.email.toLowerCase();
+
+    if (body.emailVerifiedToken) {
+      const verified = verifyOtpVerifiedToken(body.emailVerifiedToken);
+      if (verified.type !== 'email' || verified.email?.toLowerCase() !== emailLower) {
+        return res.status(400).json({ error: 'BadRequest', message: 'Invalid email verification token' });
+      }
+    } else {
+      const doc = await OTP.findOne({
+        type: 'email',
+        email: emailLower,
+        isUsed: false,
+        expiresAt: { $gt: new Date() }
+      }).select('+otp');
+
+      if (!doc || doc.otp !== body.otp) {
+        return res.status(400).json({ error: 'BadRequest', message: 'Invalid OTP' });
+      }
+      doc.isUsed = true;
+      await doc.save();
+    }
+
+    const user = await User.findOne({ email: emailLower, isActive: true });
+    if (user) {
+      if (!user.loginApproved) {
+        return res.status(403).json({ error: 'Forbidden', message: 'Login not approved' });
+      }
+      const { accessToken } = await createSessionAndTokens({ subjectType: 'user', subject: user, req, res });
+      return res.json({ accessToken, exists: true, user: user.toJSON() });
+    }
+
+    const registrationToken = signRegistrationToken({
+      email: emailLower,
+      emailVerified: true,
+      clientCode: body.clientCode?.toUpperCase() || null
+    });
+
+    return res.json({ exists: false, registrationToken, email: emailLower });
+  })
+);
+
 router.post(
   '/user/login',
   asyncHandler(async (req, res) => {
