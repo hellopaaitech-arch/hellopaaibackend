@@ -28,6 +28,41 @@ export async function sendWhatsAppOtp({ toMobile, otp }) {
 
   const url = `https://graph.facebook.com/v21.0/${phoneId}/messages`;
 
+  // Build components array
+  const components = [
+    {
+      type: 'body',
+      parameters: [
+        {
+          type: 'text',
+          text: otp
+        }
+      ]
+    }
+  ];
+
+  // If template has buttons (URL or quick reply), add button component
+  // Check if button parameters are configured via env
+  const buttonUrl = env.WHATSAPP_BUTTON_URL;
+  const buttonIndex = env.WHATSAPP_BUTTON_INDEX || 0;
+  const hasButtons = env.WHATSAPP_TEMPLATE_HAS_BUTTONS || false;
+  
+  // If template requires buttons, add button component
+  // For URL buttons, provide the URL parameter
+  if (hasButtons) {
+    components.push({
+      type: 'button',
+      sub_type: 'url',
+      index: buttonIndex,
+      parameters: [
+        {
+          type: 'text',
+          text: buttonUrl || 'https://hellopaaitech.com' // Provide URL parameter for button
+        }
+      ]
+    });
+  }
+
   const payload = {
     messaging_product: 'whatsapp',
     to: formattedMobile,
@@ -37,17 +72,7 @@ export async function sendWhatsAppOtp({ toMobile, otp }) {
       language: {
         code: templateLanguage
       },
-      components: [
-        {
-          type: 'body',
-          parameters: [
-            {
-              type: 'text',
-              text: otp
-            }
-          ]
-        }
-      ]
+      components
     }
   };
 

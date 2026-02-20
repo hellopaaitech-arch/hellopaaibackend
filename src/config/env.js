@@ -29,6 +29,9 @@ const envSchema = z.object({
   WHATSAPP_TOKEN: z.string().optional(),
   WHATSAPP_TEMPLATE_NAME: z.string().optional().default('otp_verification'),
   WHATSAPP_TEMPLATE_LANGUAGE: z.string().optional().default('en_US'),
+  WHATSAPP_TEMPLATE_HAS_BUTTONS: z.coerce.boolean().optional().default(false),
+  WHATSAPP_BUTTON_URL: z.string().url().optional(),
+  WHATSAPP_BUTTON_INDEX: z.coerce.number().int().optional().default(0),
 
   // AWS S3
   AWS_ACCESS_KEY_ID: z.string().optional(),

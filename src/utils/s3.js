@@ -138,7 +138,9 @@ export const uploadToS3 = async (file, folder = '') => {
       CacheControl: 'max-age=31536000',
       Metadata: {
         'uploaded-by': 'hello-paai',
-        'upload-timestamp': Date.now().toString()
+        'upload-timestamp': Date.now().toString(),
+        ...(file.userId ? { 'user-id': String(file.userId) } : {}),
+        ...(file.userType ? { 'user-type': file.userType } : {})
       }
     });
 
