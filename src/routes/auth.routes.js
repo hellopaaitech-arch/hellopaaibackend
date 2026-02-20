@@ -13,8 +13,10 @@ import {
   signAccessToken,
   signRefreshToken,
   signOtpVerifiedToken,
+  signRegistrationToken,
   verifyRefreshToken,
-  verifyOtpVerifiedToken
+  verifyOtpVerifiedToken,
+  verifyRegistrationToken
 } from '../utils/jwt.js';
 import { clearRefreshCookie, setRefreshCookie } from '../utils/authCookies.js';
 import { env } from '../config/env.js';
@@ -254,6 +256,217 @@ router.post(
   })
 );
 
+// Get registration data (for step 3 - to know email/clientCode)
+router.get(
+  '/user/register/data',
+  asyncHandler(async (req, res) => {
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Registration token required' });
+    }
+
+    let regData;
+    try {
+      regData = verifyRegistrationToken(token);
+    } catch {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired registration token' });
+    }
+
+    return res.json({
+      email: regData.email,
+      clientCode: regData.clientCode,
+      emailVerified: regData.emailVerified,
+      mobileVerified: regData.mobileVerified,
+      mobile: regData.mobile,
+      profile: regData.profile,
+      logoUrl: regData.logoUrl
+    });
+  })
+);
+
+// Step 2: Mobile verification (uses registrationToken from step 1)
+router.post(
+  '/user/register/mobile-verify',
+  asyncHandler(async (req, res) => {
+    const schema = z.object({
+      registrationToken: z.string().min(1),
+      mobile: z.string().min(6),
+      otp: z.string().min(4)
+    });
+    const body = schema.parse(req.body);
+
+    // Verify registration token
+    let regData;
+    try {
+      regData = verifyRegistrationToken(body.registrationToken);
+    } catch {
+      return res.status(400).json({ error: 'BadRequest', message: 'Invalid or expired registration token' });
+    }
+
+    if (!regData.emailVerified) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Email not verified' });
+    }
+
+    // Verify mobile OTP
+    const doc = await OTP.findOne({
+      type: 'mobile',
+      mobile: body.mobile,
+      isUsed: false,
+      expiresAt: { $gt: new Date() }
+    }).select('+otp');
+    
+    if (!doc || doc.otp !== body.otp) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Invalid OTP' });
+    }
+    
+    doc.isUsed = true;
+    await doc.save();
+
+    // Return mobile verified token
+    const mobileVerifiedToken = signOtpVerifiedToken({ type: 'mobile', mobile: body.mobile });
+    
+    // Update registration token with mobile verified
+    const updatedRegistrationToken = signRegistrationToken({
+      email: regData.email,
+      emailVerified: true,
+      mobile: body.mobile,
+      mobileVerified: true,
+      clientCode: regData.clientCode
+    });
+
+    return res.json({ mobileVerifiedToken, registrationToken: updatedRegistrationToken });
+  })
+);
+
+// Step 3: Save profile details + image (requires registrationToken bearer)
+router.post(
+  '/user/register/profile',
+  asyncHandler(async (req, res) => {
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Registration token required' });
+    }
+
+    let regData;
+    try {
+      regData = verifyRegistrationToken(token);
+    } catch {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired registration token' });
+    }
+
+    if (!regData.emailVerified || !regData.mobileVerified) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Email and mobile must be verified' });
+    }
+
+    const schema = z.object({
+      clientCode: z.string().min(1).optional(), // Can update if not set in step 1
+      name: z.string().optional(),
+      dob: z.string().optional(),
+      timeOfBirth: z.string().optional(),
+      placeOfBirth: z.string().optional(),
+      gowthra: z.string().optional(),
+      nativeLanguage: z.string().optional(),
+      logoUrl: z.union([z.string().url(), z.literal('')]).optional(),
+      liveLocation: z.object({
+        latitude: z.number().optional(),
+        longitude: z.number().optional(),
+        formattedAddress: z.string().optional(),
+        city: z.string().optional(),
+        state: z.string().optional(),
+        country: z.string().optional()
+      }).optional()
+    });
+    const body = schema.parse(req.body);
+
+    // Update registration token with profile data
+    const clientCode = body.clientCode?.toUpperCase() || regData.clientCode;
+    if (!clientCode) {
+      return res.status(400).json({ error: 'BadRequest', message: 'clientCode required' });
+    }
+
+    const updatedRegistrationToken = signRegistrationToken({
+      email: regData.email,
+      emailVerified: true,
+      mobile: regData.mobile,
+      mobileVerified: true,
+      clientCode,
+      profile: {
+        name: body.name,
+        dob: body.dob,
+        timeOfBirth: body.timeOfBirth,
+        placeOfBirth: body.placeOfBirth,
+        gowthra: body.gowthra,
+        nativeLanguage: body.nativeLanguage
+      },
+      logoUrl: body.logoUrl,
+      liveLocation: body.liveLocation
+    });
+
+    return res.json({ registrationToken: updatedRegistrationToken, profileSaved: true });
+  })
+);
+
+// Step 4: Complete registration (uses registrationToken + password)
+router.post(
+  '/user/register/complete',
+  asyncHandler(async (req, res) => {
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Registration token required' });
+    }
+
+    let regData;
+    try {
+      regData = verifyRegistrationToken(token);
+    } catch {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired registration token' });
+    }
+
+    if (!regData.emailVerified || !regData.mobileVerified || !regData.clientCode) {
+      return res.status(400).json({ error: 'BadRequest', message: 'All steps must be completed' });
+    }
+
+    const schema = z.object({
+      password: z.string().min(6)
+    });
+    const body = schema.parse(req.body);
+
+    const client = await Client.findOne({ clientId: regData.clientCode, isActive: true });
+    if (!client) {
+      return res.status(400).json({ error: 'BadRequest', message: 'Invalid client ID' });
+    }
+
+    const profile = regData.profile || {};
+    const liveLocation = regData.liveLocation ? {
+      ...regData.liveLocation,
+      lastUpdated: new Date()
+    } : undefined;
+
+    const created = await User.create({
+      email: regData.email,
+      mobile: regData.mobile,
+      password: body.password,
+      emailVerified: true,
+      mobileVerified: true,
+      loginApproved: true,
+      isActive: true,
+      clientId: client._id,
+      profile: Object.keys(profile).length > 0 ? profile : undefined,
+      profileImage: regData.logoUrl || undefined,
+      liveLocation
+    });
+
+    // Auto-login after registration
+    const { accessToken } = await createSessionAndTokens({ subjectType: 'user', subject: created, req, res });
+
+    return res.status(201).json({ user: created, accessToken });
+  })
+);
+
+// Legacy: Old user register endpoint (kept for backward compatibility)
 router.post(
   '/user/register',
   asyncHandler(async (req, res) => {
@@ -375,62 +588,39 @@ router.post(
   })
 );
 
-// AI / Email-only sign-in: if email exists return token (after OTP verify), else send OTP for verification
+// AI Email Sign-in: Email is automatically verified (no OTP needed)
+// Returns registrationToken if user doesn't exist, or accessToken if exists
 router.post(
   '/user/email-signin',
   asyncHandler(async (req, res) => {
-    const schema = z.object({ email: z.string().email() });
-    const { email } = schema.parse(req.body);
+    const schema = z.object({ 
+      email: z.string().email(),
+      clientCode: z.string().min(1).optional() // Optional: can be set in step 1
+    });
+    const { email, clientCode } = schema.parse(req.body);
     const emailLower = email.toLowerCase();
 
     const user = await User.findOne({ email: emailLower, isActive: true });
-    const exists = !!user;
-
-    // Request OTP is handled by frontend calling /otp/request
-    // This endpoint just returns whether user exists
-    return res.json({ exists, email: emailLower });
-  })
-);
-
-// Verify OTP and either login (if exists) or return verifiedToken for registration
-router.post(
-  '/user/email-signin/verify',
-  asyncHandler(async (req, res) => {
-    const schema = z.object({
-      email: z.string().email(),
-      otp: z.string().min(4),
-      emailVerifiedToken: z.string().optional() // If frontend already verified
-    });
-    const body = schema.parse(req.body);
-    const emailLower = body.email.toLowerCase();
-
-    if (body.emailVerifiedToken) {
-      const verified = verifyOtpVerifiedToken(body.emailVerifiedToken);
-      if (verified.type !== 'email' || verified.email?.toLowerCase() !== emailLower) {
-        return res.status(400).json({ error: 'BadRequest', message: 'Invalid verification token' });
-      }
-    } else {
-      const doc = await OTP.findOne({
-        type: 'email',
-        email: emailLower,
-        isUsed: false,
-        expiresAt: { $gt: new Date() }
-      }).select('+otp');
-      if (!doc || doc.otp !== body.otp) {
-        return res.status(400).json({ error: 'BadRequest', message: 'Invalid OTP' });
-      }
-      doc.isUsed = true;
-      await doc.save();
-    }
-
-    const user = await User.findOne({ email: emailLower, isActive: true });
+    
     if (user && user.loginApproved) {
+      // User exists and approved - login
       const { accessToken } = await createSessionAndTokens({ subjectType: 'user', subject: user, req, res });
       return res.json({ accessToken, exists: true, user: user.toJSON() });
     }
 
-    const verifiedToken = signOtpVerifiedToken({ type: 'email', email: emailLower });
-    return res.json({ exists: false, verifiedToken });
+    // User doesn't exist or not approved - create registration token
+    // Email is considered verified (AI sign-in = verified)
+    const registrationToken = signRegistrationToken({ 
+      email: emailLower,
+      emailVerified: true,
+      clientCode: clientCode?.toUpperCase() || null
+    });
+
+    return res.json({ 
+      exists: false, 
+      registrationToken,
+      email: emailLower 
+    });
   })
 );
 

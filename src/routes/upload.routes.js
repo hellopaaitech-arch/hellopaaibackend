@@ -3,7 +3,7 @@ import multer from 'multer';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { generateUploadUrl, uploadToS3 } from '../utils/s3.js';
-import { verifyAccessToken } from '../utils/jwt.js';
+import { verifyAccessToken, verifyRegistrationToken } from '../utils/jwt.js';
 
 const router = Router();
 const upload = multer({
@@ -29,16 +29,31 @@ router.post(
       next();
     });
   },
-  // Optional auth - try to authenticate but don't fail if no token
+  // Optional auth - try to authenticate (accessToken) or registration token
   (req, res, next) => {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
     if (token) {
       try {
+        // Try access token first (authenticated user)
         const payload = verifyAccessToken(token);
         req.auth = payload;
+        req.authType = 'access';
       } catch {
-        // Ignore auth errors - allow unauthenticated uploads for registration
+        try {
+          // Try registration token (step 3 of registration)
+          const regData = verifyRegistrationToken(token);
+          req.auth = { 
+            subjectType: 'registration',
+            sub: regData.email,
+            email: regData.email,
+            clientCode: regData.clientCode
+          };
+          req.authType = 'registration';
+          req.registrationData = regData;
+        } catch {
+          // Ignore - allow unauthenticated uploads for backward compatibility
+        }
       }
     }
     next();
@@ -63,13 +78,21 @@ router.post(
       }
     }
     
-    // Include user/client ID in filename for tracking (if authenticated)
+    // Include user/client ID in filename for tracking (if authenticated or registration token)
     if (req.auth) {
-      const prefix = `${req.auth.subjectType}_${req.auth.sub}_`;
-      req.file.originalname = prefix + req.file.originalname;
-      // Add user info to file metadata for tracking
-      req.file.userId = req.auth.sub;
-      req.file.userType = req.auth.subjectType;
+      if (req.authType === 'registration') {
+        // Registration flow: use email as identifier
+        const prefix = `reg_${req.auth.email.replace('@', '_at_')}_`;
+        req.file.originalname = prefix + req.file.originalname;
+        req.file.userId = req.auth.email;
+        req.file.userType = 'registration';
+      } else {
+        // Authenticated user
+        const prefix = `${req.auth.subjectType}_${req.auth.sub}_`;
+        req.file.originalname = prefix + req.file.originalname;
+        req.file.userId = req.auth.sub;
+        req.file.userType = req.auth.subjectType;
+      }
     }
     
     const result = await uploadToS3(req.file, finalFolder);

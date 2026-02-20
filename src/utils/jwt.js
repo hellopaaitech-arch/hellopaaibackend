@@ -34,3 +34,15 @@ export function verifyOtpVerifiedToken(token) {
   return jwt.verify(token, env.JWT_OTP_SECRET, { issuer: 'hello-paai-otp' });
 }
 
+// Registration token for 4-step registration flow (email verified, mobile pending)
+export function signRegistrationToken(payload, opts = {}) {
+  return jwt.sign(payload, env.JWT_OTP_SECRET, {
+    expiresIn: opts.expiresIn ?? '1h', // 1 hour for registration flow
+    issuer: 'hello-paai-registration'
+  });
+}
+
+export function verifyRegistrationToken(token) {
+  return jwt.verify(token, env.JWT_OTP_SECRET, { issuer: 'hello-paai-registration' });
+}
+

@@ -41,14 +41,11 @@ export async function sendWhatsAppOtp({ toMobile, otp }) {
     }
   ];
 
-  // If template has buttons (URL or quick reply), add button component
-  // Check if button parameters are configured via env
-  const buttonUrl = env.WHATSAPP_BUTTON_URL;
-  const buttonIndex = env.WHATSAPP_BUTTON_INDEX || 0;
+  // If template has a URL button, the parameter must be a short dynamic value (e.g. OTP),
+  // not a URL - Meta rejects "parameter contains url". Use OTP (6 digits) like the working reference.
+  const buttonIndex = Number(env.WHATSAPP_BUTTON_INDEX) || 0;
   const hasButtons = env.WHATSAPP_TEMPLATE_HAS_BUTTONS || false;
-  
-  // If template requires buttons, add button component
-  // For URL buttons, provide the URL parameter
+
   if (hasButtons) {
     components.push({
       type: 'button',
@@ -57,7 +54,7 @@ export async function sendWhatsAppOtp({ toMobile, otp }) {
       parameters: [
         {
           type: 'text',
-          text: buttonUrl || 'https://hellopaaitech.com' // Provide URL parameter for button
+          text: String(otp).slice(0, 15) // OTP or short code; must not be a URL, max 15 chars
         }
       ]
     });
