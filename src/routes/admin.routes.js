@@ -123,7 +123,7 @@ router.patch(
       dob: z.string().optional(),
       timeOfBirth: z.string().optional(),
       placeOfBirth: z.string().optional(),
-      gowthra: z.string().optional(),
+      profession: z.string().optional(),
       logoUrl: z.string().url().optional(),
       loginApproved: z.boolean().optional(),
       isActive: z.boolean().optional()
@@ -136,7 +136,7 @@ router.patch(
     if (body.dob !== undefined) user.profile = { ...(user.profile?.toObject?.() || user.profile || {}), dob: body.dob ? new Date(body.dob) : null };
     if (body.timeOfBirth !== undefined) user.profile = { ...(user.profile?.toObject?.() || user.profile || {}), timeOfBirth: body.timeOfBirth };
     if (body.placeOfBirth !== undefined) user.profile = { ...(user.profile?.toObject?.() || user.profile || {}), placeOfBirth: body.placeOfBirth };
-    if (body.gowthra !== undefined) user.profile = { ...(user.profile?.toObject?.() || user.profile || {}), gowthra: body.gowthra };
+    if (body.profession !== undefined) user.profile = { ...(user.profile?.toObject?.() || user.profile || {}), profession: body.profession };
     if (body.clientId) user.clientId = body.clientId;
     if (body.logoUrl !== undefined) user.profileImage = body.logoUrl;
     if (body.loginApproved !== undefined) user.loginApproved = body.loginApproved;

@@ -31,7 +31,7 @@ const userSchema = new mongoose.Schema({
     placeOfBirth: String,
     latitude: { type: Number, min: -90, max: 90 },
     longitude: { type: Number, min: -180, max: 180 },
-    gowthra: String,
+    profession: String,
     nativeLanguage: String
   },
   liveLocation: {

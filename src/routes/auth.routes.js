@@ -205,7 +205,7 @@ router.post(
       dob: z.string().optional(),
       timeOfBirth: z.string().optional(),
       placeOfBirth: z.string().optional(),
-      gowthra: z.string().optional(),
+      profession: z.string().optional(),
       logoUrl: z.string().url().optional(),
       loginApproved: z.boolean().optional().default(true),
       isActive: z.boolean().optional().default(true),
@@ -238,7 +238,7 @@ router.post(
     if (body.dob) profile.dob = new Date(body.dob);
     if (body.timeOfBirth) profile.timeOfBirth = body.timeOfBirth;
     if (body.placeOfBirth) profile.placeOfBirth = body.placeOfBirth;
-    if (body.gowthra) profile.gowthra = body.gowthra;
+    if (body.profession) profile.profession = body.profession;
 
     const created = await User.create({
       email: body.email,
@@ -367,7 +367,7 @@ router.post(
       dob: z.string().optional(),
       timeOfBirth: z.string().optional(),
       placeOfBirth: z.string().optional(),
-      gowthra: z.string().optional(),
+      profession: z.string().optional(),
       nativeLanguage: z.string().optional(),
       logoUrl: z.union([z.string().url(), z.literal('')]).optional(),
       liveLocation: z.object({
@@ -398,7 +398,7 @@ router.post(
         dob: body.dob,
         timeOfBirth: body.timeOfBirth,
         placeOfBirth: body.placeOfBirth,
-        gowthra: body.gowthra,
+        profession: body.profession,
         nativeLanguage: body.nativeLanguage
       },
       logoUrl: body.logoUrl,
@@ -484,7 +484,7 @@ router.post(
       dob: z.string().optional(),
       timeOfBirth: z.string().optional(),
       placeOfBirth: z.string().optional(),
-      gowthra: z.string().optional(),
+      profession: z.string().optional(),
       nativeLanguage: z.string().optional(),
       logoUrl: z.union([z.string().url(), z.literal('')]).optional(),
       liveLocation: z.object({
@@ -518,7 +518,7 @@ router.post(
     if (body.dob) profile.dob = new Date(body.dob);
     if (body.timeOfBirth) profile.timeOfBirth = body.timeOfBirth;
     if (body.placeOfBirth) profile.placeOfBirth = body.placeOfBirth;
-    if (body.gowthra) profile.gowthra = body.gowthra;
+    if (body.profession) profile.profession = body.profession;
     if (body.nativeLanguage) profile.nativeLanguage = body.nativeLanguage;
 
     const liveLocation = body.liveLocation ? {
@@ -786,7 +786,7 @@ router.patch(
         dob: z.string().optional(),
         timeOfBirth: z.string().optional(),
         placeOfBirth: z.string().optional(),
-        gowthra: z.string().optional(),
+        profession: z.string().optional(),
         nativeLanguage: z.string().optional(),
         logoUrl: z.union([z.string().url(), z.literal('')]).optional(),
         liveLocation: z.object({
@@ -807,7 +807,7 @@ router.patch(
       if (body.dob !== undefined) { user.profile = user.profile || {}; user.profile.dob = body.dob ? new Date(body.dob) : undefined; }
       if (body.timeOfBirth !== undefined) { user.profile = user.profile || {}; user.profile.timeOfBirth = body.timeOfBirth; }
       if (body.placeOfBirth !== undefined) { user.profile = user.profile || {}; user.profile.placeOfBirth = body.placeOfBirth; }
-      if (body.gowthra !== undefined) { user.profile = user.profile || {}; user.profile.gowthra = body.gowthra; }
+      if (body.profession !== undefined) { user.profile = user.profile || {}; user.profile.profession = body.profession; }
       if (body.nativeLanguage !== undefined) { user.profile = user.profile || {}; user.profile.nativeLanguage = body.nativeLanguage; }
       if (body.logoUrl !== undefined) user.profileImage = body.logoUrl || undefined;
       if (body.liveLocation !== undefined) {
