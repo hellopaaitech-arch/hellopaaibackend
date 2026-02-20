@@ -187,6 +187,17 @@ export const deleteFromS3 = async (keyOrUrl) => {
 };
 
 /**
+ * Return a working public URL for an S3 key or existing URL.
+ * If input is already https URL, return as-is. Otherwise treat as key and build public URL.
+ */
+export function getPublicUrl(keyOrUrl) {
+  if (!keyOrUrl || typeof keyOrUrl !== 'string') return null;
+  if (keyOrUrl.startsWith('http://') || keyOrUrl.startsWith('https://')) return keyOrUrl;
+  if (!env.AWS_BUCKET_NAME || !env.AWS_REGION) return keyOrUrl;
+  return `https://${env.AWS_BUCKET_NAME}.s3.${env.AWS_REGION}.amazonaws.com/${keyOrUrl.replace(/^\//, '')}`;
+}
+
+/**
  * Extract S3 key from S3 URL
  */
 export const extractS3KeyFromUrl = (url) => {

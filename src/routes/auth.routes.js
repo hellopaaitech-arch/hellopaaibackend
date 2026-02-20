@@ -8,7 +8,7 @@ import Session from '../models/Session.js';
 import OTP from '../models/OTP.js';
 
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { sha256 } from '../utils/crypto.js';
+import { sha256, randomPassword } from '../utils/crypto.js';
 import {
   signAccessToken,
   signRefreshToken,
@@ -20,6 +20,7 @@ import {
 } from '../utils/jwt.js';
 import { clearRefreshCookie, setRefreshCookie } from '../utils/authCookies.js';
 import { env } from '../config/env.js';
+import { getPublicUrl } from '../utils/s3.js';
 import { requireAuth, requireRoles, requireSubjectTypes } from '../middleware/auth.js';
 
 const router = Router();
@@ -408,7 +409,7 @@ router.post(
   })
 );
 
-// Step 4: Complete registration (uses registrationToken + password)
+// Step 4: Complete registration (uses registrationToken; password optional)
 router.post(
   '/user/register/complete',
   asyncHandler(async (req, res) => {
@@ -430,7 +431,7 @@ router.post(
     }
 
     const schema = z.object({
-      password: z.string().min(6)
+      password: z.string().min(6).optional()
     });
     const body = schema.parse(req.body);
 
@@ -445,10 +446,12 @@ router.post(
       lastUpdated: new Date()
     } : undefined;
 
+    const passwordToSet = body.password && body.password.length >= 6 ? body.password : randomPassword(24);
+
     const created = await User.create({
       email: regData.email,
       mobile: regData.mobile,
-      password: body.password,
+      password: passwordToSet,
       emailVerified: true,
       mobileVerified: true,
       loginApproved: true,
@@ -713,8 +716,11 @@ router.get(
       const client = await Client.findById(sub);
       return res.json({ subjectType, subject: client });
     }
-    const user = await User.findById(sub);
-    return res.json({ subjectType, subject: user });
+    const user = await User.findById(sub).populate('clientId', 'clientId businessName fullName');
+    if (!user) return res.status(404).json({ error: 'NotFound', message: 'User not found' });
+    const subject = user.toJSON ? user.toJSON() : user;
+    subject.profileImageUrl = getPublicUrl(user.profileImage) || user.profileImage || null;
+    return res.json({ subjectType, subject });
   })
 );
 

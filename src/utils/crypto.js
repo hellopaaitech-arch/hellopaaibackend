@@ -13,3 +13,8 @@ export function randomNumericOtp(length = 6) {
   return out;
 }
 
+/** Generate a random password (e.g. when user skips setting password at registration). */
+export function randomPassword(length = 24) {
+  return crypto.randomBytes(length).toString('hex');
+}
+
