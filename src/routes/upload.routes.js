@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { generateUploadUrl, uploadToS3 } from '../utils/s3.js';
 import { verifyAccessToken, verifyRegistrationToken } from '../utils/jwt.js';
+import User from '../models/User.js';
 
 const router = Router();
 const upload = multer({
@@ -96,9 +97,15 @@ router.post(
     }
     
     const result = await uploadToS3(req.file, finalFolder);
-    
+    const fileUrl = result.url || result.Location;
+
+    // If authenticated as user, save profile image URL so GET /auth/me returns it
+    if (req.auth && req.auth.subjectType === 'user' && req.auth.sub) {
+      await User.findByIdAndUpdate(req.auth.sub, { profileImage: fileUrl });
+    }
+
     return res.json({ 
-      fileUrl: result.url || result.Location, 
+      fileUrl, 
       key: result.key,
       uploadedBy: req.auth ? { 
         subjectType: req.auth.subjectType, 
