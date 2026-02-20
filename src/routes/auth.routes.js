@@ -20,7 +20,7 @@ import {
 } from '../utils/jwt.js';
 import { clearRefreshCookie, setRefreshCookie } from '../utils/authCookies.js';
 import { env } from '../config/env.js';
-import { getPublicUrl } from '../utils/s3.js';
+import { getPublicUrl, getobject } from '../utils/s3.js';
 import { requireAuth, requireRoles, requireSubjectTypes } from '../middleware/auth.js';
 
 const router = Router();
@@ -719,7 +719,15 @@ router.get(
     const user = await User.findById(sub).populate('clientId', 'clientId businessName fullName');
     if (!user) return res.status(404).json({ error: 'NotFound', message: 'User not found' });
     const subject = user.toJSON ? user.toJSON() : user;
-    subject.profileImageUrl = getPublicUrl(user.profileImage) || user.profileImage || null;
+    if (user.profileImage) {
+      try {
+        subject.profileImageUrl = await getobject(user.profileImage, 86400);
+      } catch {
+        subject.profileImageUrl = getPublicUrl(user.profileImage) || user.profileImage;
+      }
+    } else {
+      subject.profileImageUrl = null;
+    }
     return res.json({ subjectType, subject });
   })
 );
